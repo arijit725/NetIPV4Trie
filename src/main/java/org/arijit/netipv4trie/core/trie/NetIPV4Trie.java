@@ -171,26 +171,101 @@ public class NetIPV4Trie<T extends Object> {
 		}
 		return partEntity;
 	}
-	
-	
+
 	/**
 	 * This method will build childParent map for all the entry in Trie.
+	 * 
 	 * @return
 	 */
 	public Map<T, T> buildChildParentsMap() {
-		Map<T,T> childParentMap = new LinkedHashMap<T,T>();
+		Map<T, T> childParentMap = new LinkedHashMap<T, T>();
 		return childParentMap;
 	}
-	
-	public Map<String,T> findParentsWithVal(String entity){
-		Map<String,T> parents = new LinkedHashMap<String,T>();
+
+	public Map<String, T> findParentsWithVal(String entity) {
+		Map<String, T> parents = new LinkedHashMap<String, T>();
 		return parents;
 	}
-	
-	public List<String> findParents(String entity) throws PrefixCalculationException {
-		List<String> parents = new ArrayList<String>();
+
+	public List<T> findParents(String entity, boolean inclusive) throws PrefixCalculationException {
+		List<T> parents = new ArrayList<T>();
 		NetTrieNode<String, T> tmpRoot = root;
 		String binaryIPString = NetUtil.calculatePrefix(entity);
+		System.out.println("Searching for entity: " + entity + " Binary Prefix: " + binaryIPString);
+		boolean doBreak = false;
+		// partInfo contains the part of binaryIPString which is yet to be searched
+		String partInfo = binaryIPString;
+		while (!doBreak) {
+			if (partInfo.charAt(0) == '0') {
+				// go ot left;
+				tmpRoot = tmpRoot.getLeftChild();
+				if (tmpRoot == null) {
+					// we have reached end. So we do not have any more node to check
+					doBreak = true;
+					continue;
+				}
+				// check if tmpRoot is an legit node. if so make an entry in parents
+				String tmpEntity = tmpRoot.getKey();
+				if (partInfo.length() == tmpEntity.length()) {
+					// their length are same, so two of either will match or do not match. Also this
+					// is the last node after which no part of partInfo will be left to be matched
+					// further.
+					// in either case, the tmpEntity will not be parent of partInfo. if inclusive
+					// add entity else break the flow.
+
+					if (inclusive && partInfo.equals(tmpEntity))
+						parents.add(tmpRoot.getValue());
+					doBreak = true;
+					continue;
+				}
+
+				int index = StringUtil.findCommonPrefix(partInfo, tmpEntity);
+				int start = index + 1;
+				// if partInfo complety inside tmpEntity then only tmpRoot can be parent of
+				// searching entity.
+				if (start == tmpEntity.length() && tmpRoot.getValue() != null) {
+					parents.add(tmpRoot.getValue());
+				}
+				partInfo = partInfo.substring(start);
+				if (partInfo.isEmpty()) {
+					// we have reached to the end of requested entity.
+					doBreak = true;
+				}
+			} else {
+				tmpRoot = tmpRoot.getRightChild();
+				if (tmpRoot == null) {
+					// we have reached end. So we do not have any more node to check
+					doBreak = true;
+					continue;
+				}
+				// check if tmpRoot is an legit node. if so make an entry in parents
+
+				String tmpEntity = tmpRoot.getKey();
+				if (partInfo.length() == tmpEntity.length()) {
+					// their length are same, so two of either will match or do not match. Also this
+					// is the last node after which no part of partInfo will be left to be matched
+					// further.
+					// in either case, the tmpEntity will not be parent of partInfo. if inclusive
+					// add entity else break the flow.
+
+					if (inclusive && partInfo.equals(tmpEntity))
+						parents.add(tmpRoot.getValue());
+					doBreak = true;
+					continue;
+				}
+				int index = StringUtil.findCommonPrefix(partInfo, tmpEntity);
+				int start = index + 1;
+				if (start == tmpEntity.length() && tmpRoot.getValue() != null) {
+					parents.add(tmpRoot.getValue());
+				}
+				partInfo = partInfo.substring(start);
+				if (partInfo.isEmpty()) {
+					// we have reached to the end of requested entity.
+					doBreak = true;
+				}
+
+			}
+		}
 		return parents;
 	}
 }
