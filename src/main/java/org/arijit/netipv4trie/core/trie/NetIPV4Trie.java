@@ -1,5 +1,11 @@
 package org.arijit.netipv4trie.core.trie;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.arijit.netipv4trie.exception.PrefixCalculationException;
 import org.arijit.util.NetUtil;
 import org.arijit.util.StringUtil;
@@ -50,15 +56,8 @@ public class NetIPV4Trie<T extends Object> {
 		System.out.print("Entity : " + entity);
 		entity = NetUtil.calculatePrefix(entity);
 		System.out.println(" Binary Prefix: " + entity);
-		int start = 0;
 		String partEntity = entity;
 		while (!isInserted) {
-			if (start == entity.length()) {
-				// item is already present.
-				isInserted = true;
-				continue;
-			}
-//			String partEntity = entity.substring(start);
 			if (partEntity.charAt(0) == '0') {
 				if (tmpRoot.getLeftChild() == null) {
 					// this is going to be first entry
@@ -67,56 +66,14 @@ public class NetIPV4Trie<T extends Object> {
 					isInserted = true;
 				} else {
 					tmpRoot = tmpRoot.getLeftChild();
-					String tmpEntity = tmpRoot.getKey();
-
-					int index = StringUtil.findCommonPrefix(partEntity, tmpEntity);
-					start = index + 1;
-					if(start==partEntity.length()) {
-						//this is parent of the exisitng node.
-						//so make a node here
-						tmpEntity = tmpEntity.substring(start);
-						NetTrieNode<String, T> node = NetTrieNode.create(tmpEntity, tmpRoot.getValue());
-						node.setLeftChild(tmpRoot.getLeftChild());
-						node.setRightChild(tmpRoot.getRightChild());
-						
-						tmpRoot.setKey(partEntity);
-						tmpRoot.setValue(value);
-						if(tmpEntity.charAt(0)=='0')
-							tmpRoot.setLeftChild(node);
-						else
-							tmpRoot.setRightChild(node);
+					if (tmpRoot.getKey().equals(partEntity)) {
+						// whole partEntity is already present.
 						isInserted = true;
-						
-					}
-					else {
-					// we need to move to next element of common part
-					// break here. branching is required at this point.
-					partEntity = entity.substring(start);
-					
-					if (start == tmpEntity.length()) {
-						entity = partEntity;
-						// tmpEntity ends here. So partEntity is going to be child.
 					} else {
-						// create a new node with rest of part
-						T existingValue = tmpRoot.getValue();
-						NetTrieNode<String, T> existingLeft = tmpRoot.getLeftChild();
-						NetTrieNode<String, T> existingRight = tmpRoot.getRightChild();
-						String tmpCommonPart = tmpEntity.substring(0, start);
-						tmpRoot.setKey(tmpCommonPart);
-						tmpRoot.setValue(null);
-						String tmpRestPart = tmpEntity.substring(start);
-						// creating node with rest part and setting it to exsisting tmpRoot.
-						NetTrieNode<String, T> node = NetTrieNode.create(tmpRestPart, existingValue);
-						node.setLeftChild(existingLeft);
-						node.setRightChild(existingRight);
-						// reset left and right child of tmpRoot as we are making branch here. so left
-						// and right child should move down to branch
-						tmpRoot.setLeftChild(null);
-						tmpRoot.setRightChild(null);
-						if (tmpRestPart.charAt(0) == '0')
-							tmpRoot.setLeftChild(node);
-						else
-							tmpRoot.setRightChild(node);
+						partEntity = createBranch(tmpRoot, partEntity, value);
+						if (partEntity.length() == 0) {
+							// item already present
+							isInserted = true;
 						}
 					}
 				}
@@ -130,91 +87,110 @@ public class NetIPV4Trie<T extends Object> {
 				} else {
 					// move to next right
 					tmpRoot = tmpRoot.getRightChild();
-					String tmpEntity = tmpRoot.getKey();
-
-					int index = StringUtil.findCommonPrefix(partEntity, tmpEntity);
-					start = index + 1;
-					if(start==partEntity.length()) {
-						//this is parent of the exisitng node.
-						//so make a node here
-						tmpEntity = tmpEntity.substring(start);
-						NetTrieNode<String, T> node = NetTrieNode.create(tmpEntity, value);
-						node.setLeftChild(tmpRoot.getLeftChild());
-						node.setRightChild(tmpRoot.getRightChild());
-						
-						tmpRoot.setKey(partEntity);
-						tmpRoot.setValue(value);
-						if(tmpEntity.charAt(0)=='0')
-							tmpRoot.setLeftChild(node);
-						else
-							tmpRoot.setRightChild(node);
-						
-					}
-					else {
-					partEntity = entity.substring(start);
-					// we need to move to next element of common part
-					// break here. branching is required at this point.
-					if (start == tmpEntity.length()) {
-						// tmpEntity ends here. So partEntity is going to be child.
-						entity = partEntity;
+					if (tmpRoot.getKey().equals(partEntity)) {
+						// whole partEntity is already present.
+						isInserted = true;
 					} else {
-						// create a new node with rest of part
-						T existingValue = tmpRoot.getValue();
-						NetTrieNode<String, T> existingLeft = tmpRoot.getLeftChild();
-						NetTrieNode<String, T> existingRight = tmpRoot.getRightChild();
-						String tmpCommonPart = tmpEntity.substring(0, start);
-						tmpRoot.setKey(tmpCommonPart);
-						tmpRoot.setValue(null);
-						String tmpRestPart = tmpEntity.substring(start);
-						// creating node with rest part and setting it to exsisting tmpRoot.
-						NetTrieNode<String, T> node = NetTrieNode.create(tmpRestPart, existingValue);
-						node.setLeftChild(existingLeft);
-						node.setRightChild(existingRight);
-						// reset left and right child of tmpRoot as we are making branch here. so left
-						// and right child should move down to branch
-						tmpRoot.setLeftChild(null);
-						tmpRoot.setRightChild(null);
-						
-						if (tmpRestPart.charAt(0) == '0')
-							tmpRoot.setLeftChild(node);
-						else
-							tmpRoot.setRightChild(node);
-					}
+						partEntity = createBranch(tmpRoot, partEntity, value);
+						if (partEntity.length() == 0) {
+							// item already present
+							isInserted = true;
+						}
 					}
 				}
 			}
 		}
+
 	}
 
-	private void createBranch(NetTrieNode<String, T> tmpRoot, String partEntity, int start) {
+	/**
+	 * This method will check whether any new branch is need to be created or not.
+	 * The new branch could be an intermediate branch to make two leaf entry or to
+	 * make a parent entry of an exising IP.
+	 * 
+	 * @param tmpRoot
+	 * @param partEntity
+	 * @param value
+	 * @return
+	 */
+	private String createBranch(NetTrieNode<String, T> tmpRoot, String partEntity, T value) {
 		String tmpEntity = tmpRoot.getKey();
+
 		int index = StringUtil.findCommonPrefix(partEntity, tmpEntity);
-		start = index + 1;// we need to move to next element of common part
-		// break here. branching is required at this point.
-		if (start == tmpEntity.length()) {
-			// tmpEntity ends here. So partEntity is going to be child.
-		} else {
-			// create a new node with rest of part
-			T existingValue = tmpRoot.getValue();
-			NetTrieNode<String, T> existingLeft = tmpRoot.getLeftChild();
-			NetTrieNode<String, T> existingRight = tmpRoot.getRightChild();
-			String tmpCommonPart = tmpEntity.substring(0, start);
-			tmpRoot.setKey(tmpCommonPart);
-			tmpRoot.setValue(null);
-			String tmpRestPart = tmpEntity.substring(start);
-			// creating node with rest part and setting it to exsisting tmpRoot.
-			NetTrieNode<String, T> node = NetTrieNode.create(tmpRestPart, existingValue);
-			node.setLeftChild(existingLeft);
-			node.setRightChild(existingRight);
-			// reset left and right child of tmpRoot as we are making branch here. so left
-			// and right child should move down to branch
-			tmpRoot.setLeftChild(null);
-			tmpRoot.setRightChild(null);
-			
-			if (tmpRestPart.charAt(0) == '0')
+		int start = index + 1;
+		if (start == partEntity.length()) {
+			// this is parent of the exisitng node.
+			// so inject a node here down tempRoot and move existing left and right node to
+			// newly created node
+			tmpEntity = tmpEntity.substring(start);
+			NetTrieNode<String, T> node = NetTrieNode.create(tmpEntity, tmpRoot.getValue());
+			node.setLeftChild(tmpRoot.getLeftChild());
+			node.setRightChild(tmpRoot.getRightChild());
+
+			tmpRoot.setKey(partEntity);
+			tmpRoot.setValue(value);
+			if (tmpEntity.charAt(0) == '0')
 				tmpRoot.setLeftChild(node);
 			else
 				tmpRoot.setRightChild(node);
+			// once parent is inserted means there is nothing to set any more. so set
+			// partEntity as empty.
+			partEntity = "";
+		} else {
+			// upadet partEntity with the part which is not common with exising key string
+			// in tmpRoot
+			partEntity = partEntity.substring(start);
+			// we need to move to next element of common part
+			// break here. branching is required at this point.
+			if (start == tmpEntity.length()) {
+				// tmpEntity ends here. So partEntity is going to be child.
+
+			} else {
+				// create a new node with rest of part
+				T existingValue = tmpRoot.getValue();
+				NetTrieNode<String, T> existingLeft = tmpRoot.getLeftChild();
+				NetTrieNode<String, T> existingRight = tmpRoot.getRightChild();
+				String tmpCommonPart = tmpEntity.substring(0, start);
+				tmpRoot.setKey(tmpCommonPart);
+				tmpRoot.setValue(null);
+				String tmpRestPart = tmpEntity.substring(start);
+				// creating node with rest part and setting it to exsisting tmpRoot.
+				NetTrieNode<String, T> node = NetTrieNode.create(tmpRestPart, existingValue);
+				node.setLeftChild(existingLeft);
+				node.setRightChild(existingRight);
+				// reset left and right child of tmpRoot as we are making branch here. so left
+				// and right child should move down to branch
+				tmpRoot.setLeftChild(null);
+				tmpRoot.setRightChild(null);
+
+				if (tmpRestPart.charAt(0) == '0')
+					tmpRoot.setLeftChild(node);
+				else
+					tmpRoot.setRightChild(node);
+			}
 		}
+		return partEntity;
+	}
+	
+	
+	/**
+	 * This method will build childParent map for all the entry in Trie.
+	 * @return
+	 */
+	public Map<T, T> buildChildParentsMap() {
+		Map<T,T> childParentMap = new LinkedHashMap<T,T>();
+		return childParentMap;
+	}
+	
+	public Map<String,T> findParentsWithVal(String entity){
+		Map<String,T> parents = new LinkedHashMap<String,T>();
+		return parents;
+	}
+	
+	public List<String> findParents(String entity) throws PrefixCalculationException {
+		List<String> parents = new ArrayList<String>();
+		NetTrieNode<String, T> tmpRoot = root;
+		String binaryIPString = NetUtil.calculatePrefix(entity);
+		return parents;
 	}
 }
